@@ -47,7 +47,7 @@ To explore the simulation of bioelectric fields and their influence on embryonic
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/yourusername/bioelectric-differentiation.git
+   git clone https://github.com/HussainAther/bioelectric-differentiation.git
    ```
 
 
