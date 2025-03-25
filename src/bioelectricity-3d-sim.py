@@ -11,6 +11,7 @@ stimulus_strength = 1.0
 steps = 100
 threshold_potential = 0.6
 kT = 0.05  # Thermal energy for QTM probability (bioelectric analogy)
+coupling_strength = 0.1  # Strength of spin coupling with neighbors
 
 # Initialize voltage grid, cell states, and spin states
 def initialize_grid(size):
@@ -25,8 +26,16 @@ voltage_grid, cell_states, spin_states = initialize_grid(grid_size)
 def qtm_flip(prob):
     return np.random.rand() < prob
 
-# Update voltage, differentiation, and quantum state
+# Spin coupling influence
+def neighbor_spin_coupling(i, j, k, spins):
+    neighbors = [
+        spins[i-1, j, k], spins[i+1, j, k],
+        spins[i, j-1, k], spins[i, j+1, k],
+        spins[i, j, k-1], spins[i, j, k+1]
+    ]
+    return np.mean(neighbors)
 
+# Update voltage, differentiation, and quantum state
 def update_grid(voltage, states, spins):
     new_voltage = voltage.copy()
     for i in range(1, voltage.shape[0] - 1):
@@ -49,9 +58,11 @@ def update_grid(voltage, states, spins):
                 elif new_voltage[i, j, k] < threshold_potential / 2:
                     states[i, j, k] = 0
 
-                # QTM: simulate tunneling flip in spin state
-                energy_barrier = abs(0.5 - new_voltage[i, j, k])  # Arbitrary barrier shape
-                tunneling_prob = np.exp(-energy_barrier / kT)
+                # QTM + Neighbor Spin Coupling
+                neighbor_avg_spin = neighbor_spin_coupling(i, j, k, spins)
+                coupling_effect = coupling_strength * (1 - abs(spins[i, j, k] - neighbor_avg_spin))
+                energy_barrier = abs(0.5 - new_voltage[i, j, k]) - coupling_effect
+                tunneling_prob = np.exp(-max(energy_barrier, 0) / kT)
                 if qtm_flip(tunneling_prob):
                     spins[i, j, k] = 1 - spins[i, j, k]  # Flip spin
 
@@ -83,6 +94,6 @@ ax.scatter(diff_cells[:, 0], diff_cells[:, 1], diff_cells[:, 2], c=colors, marke
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
-plt.title('3D Bioelectric Differentiation with Spin States')
+plt.title('3D Bioelectric Differentiation with Spin Coupling')
 plt.show()
 
