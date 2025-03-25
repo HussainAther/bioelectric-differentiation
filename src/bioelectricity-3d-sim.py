@@ -1,80 +1,88 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import networkx as nx
+from mpl_toolkits.mplot3d import Axes3D
 
 # Simulation Parameters
-grid_size = (30, 30, 10)  # 3D Grid (30x30x10 cells)
-diffusion_rate = 0.2   # Rate of voltage diffusion
-decay_rate = 0.05      # Natural decay of voltage
-stimulus_strength = 1.0  # External stimulus strength
-steps = 200             # Number of simulation steps
-threshold_potential = 0.6  # Threshold for cellular differentiation
+grid_size = (30, 30, 10)
+diffusion_rate = 0.2
+decay_rate = 0.05
+stimulus_strength = 1.0
+steps = 100
+threshold_potential = 0.6
+kT = 0.05  # Thermal energy for QTM probability (bioelectric analogy)
 
+# Initialize voltage grid, cell states, and spin states
 def initialize_grid(size):
-    return np.random.rand(*size) * 0.1  # Small random voltages
+    voltage = np.random.rand(*size) * 0.1
+    cell_state = np.zeros(size)  # 0 = undifferentiated, 1 = differentiated
+    spin_state = np.random.choice([0, 1], size=size)  # |0> or |1> spin state
+    return voltage, cell_state, spin_state
 
-# Initialize voltage grid
-voltage_grid = initialize_grid(grid_size)
-cell_states = np.zeros(grid_size)  # 0 = undifferentiated, 1 = differentiated
+voltage_grid, cell_states, spin_states = initialize_grid(grid_size)
 
-# Function to update the voltage grid
-def update_voltage(grid, states):
-    new_grid = grid.copy()
-    for i in range(1, grid.shape[0] - 1):
-        for j in range(1, grid.shape[1] - 1):
-            for k in range(1, grid.shape[2] - 1):
-                # Compute Laplacian (reaction-diffusion term)
+# Bistability and QTM simulation
+def qtm_flip(prob):
+    return np.random.rand() < prob
+
+# Update voltage, differentiation, and quantum state
+
+def update_grid(voltage, states, spins):
+    new_voltage = voltage.copy()
+    for i in range(1, voltage.shape[0] - 1):
+        for j in range(1, voltage.shape[1] - 1):
+            for k in range(1, voltage.shape[2] - 1):
                 laplacian = (
-                    grid[i-1, j, k] + grid[i+1, j, k] +
-                    grid[i, j-1, k] + grid[i, j+1, k] +
-                    grid[i, j, k-1] + grid[i, j, k+1] -
-                    6 * grid[i, j, k]
+                    voltage[i-1, j, k] + voltage[i+1, j, k] +
+                    voltage[i, j-1, k] + voltage[i, j+1, k] +
+                    voltage[i, j, k-1] + voltage[i, j, k+1] -
+                    6 * voltage[i, j, k]
                 )
-                
-                # Update rule: diffusion + decay + external stimulus
-                new_grid[i, j, k] += diffusion_rate * laplacian - decay_rate * grid[i, j, k]
-                
-                # Apply external stimulus to random locations
-                if np.random.rand() < 0.01:
-                    new_grid[i, j, k] += stimulus_strength
-                
-                # Cellular differentiation logic
-                if new_grid[i, j, k] > threshold_potential:
-                    states[i, j, k] = 1  # Mark as differentiated
-    
-    return np.clip(new_grid, 0, 1), states
+                new_voltage[i, j, k] += diffusion_rate * laplacian - decay_rate * voltage[i, j, k]
 
-# Graph Representation of the Bioelectric Network
-def create_bioelectric_graph(grid):
+                if np.random.rand() < 0.01:
+                    new_voltage[i, j, k] += stimulus_strength
+
+                # Bistability: differentiate or revert depending on potential
+                if new_voltage[i, j, k] > threshold_potential:
+                    states[i, j, k] = 1
+                elif new_voltage[i, j, k] < threshold_potential / 2:
+                    states[i, j, k] = 0
+
+                # QTM: simulate tunneling flip in spin state
+                energy_barrier = abs(0.5 - new_voltage[i, j, k])  # Arbitrary barrier shape
+                tunneling_prob = np.exp(-energy_barrier / kT)
+                if qtm_flip(tunneling_prob):
+                    spins[i, j, k] = 1 - spins[i, j, k]  # Flip spin
+
+    return np.clip(new_voltage, 0, 1), states, spins
+
+# Create 3D graph representation
+def create_bioelectric_graph(grid, states, spins):
     G = nx.grid_graph(dim=[grid.shape[0], grid.shape[1], grid.shape[2]])
     for i in range(grid.shape[0]):
         for j in range(grid.shape[1]):
             for k in range(grid.shape[2]):
                 G.nodes[(i, j, k)]['voltage'] = grid[i, j, k]
-                G.nodes[(i, j, k)]['state'] = cell_states[i, j, k]
-    return G
-
-bioelectric_graph = create_bioelectric_graph(voltage_grid)
-
-def update_graph(G, grid, states):
-    for i in range(grid.shape[0]):
-        for j in range(grid.shape[1]):
-            for k in range(grid.shape[2]):
-                G.nodes[(i, j, k)]['voltage'] = grid[i, j, k]
                 G.nodes[(i, j, k)]['state'] = states[i, j, k]
+                G.nodes[(i, j, k)]['spin'] = spins[i, j, k]
     return G
 
 # Run Simulation
 for step in range(steps):
-    voltage_grid, cell_states = update_voltage(voltage_grid, cell_states)
-    bioelectric_graph = update_graph(bioelectric_graph, voltage_grid, cell_states)
+    voltage_grid, cell_states, spin_states = update_grid(voltage_grid, cell_states, spin_states)
 
-# Visualization: 2D slice of the 3D grid
-fig, ax = plt.subplots()
-cmap = plt.get_cmap("viridis")
-im = ax.imshow(voltage_grid[:, :, 5], cmap=cmap, vmin=0, vmax=1)
-plt.colorbar(im, label="Voltage Potential")
-plt.title("Mid-Layer Voltage Distribution")
+bioelectric_graph = create_bioelectric_graph(voltage_grid, cell_states, spin_states)
+
+# Visualize differentiated cells with spin states
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+diff_cells = np.array(np.where(cell_states == 1)).T
+colors = ['blue' if spin_states[tuple(cell)] == 0 else 'red' for cell in diff_cells]
+ax.scatter(diff_cells[:, 0], diff_cells[:, 1], diff_cells[:, 2], c=colors, marker='o')
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+plt.title('3D Bioelectric Differentiation with Spin States')
 plt.show()
 
