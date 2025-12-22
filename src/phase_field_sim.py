@@ -37,9 +37,14 @@ def update_voltage_field(voltage, phase):
 # Run Simulation
 voltage_grid, spin_states, phase_field = initialize_fields(grid_size)
 
+# Store time-lapse data
+time_lapse_tensor = np.zeros((steps, 2, *grid_size))
+
 for step in range(steps):
     phase_field = update_phase_field(phase_field, voltage_grid, spin_states)
     voltage_grid = update_voltage_field(voltage_grid, phase_field)
+    time_lapse_tensor[step, 0] = voltage_grid
+    time_lapse_tensor[step, 1] = phase_field
     if step % 50 == 0:
         print(f"Step {step} complete")
 
@@ -51,8 +56,7 @@ plt.colorbar(label='Phase (Φ)')
 plt.tight_layout()
 plt.show()
 
-# Export voltage + phase as multi-channel .npy
-export_tensor = np.stack([voltage_grid, phase_field], axis=0)
-np.save("phase_voltage_fields.npy", export_tensor)
-print("Exported multi-channel tensor to phase_voltage_fields.npy")
+# Export voltage + phase as multi-channel .npy (time-lapse)
+np.save("phase_voltage_timelapse.npy", time_lapse_tensor)
+print("Exported time-lapse tensor to phase_voltage_timelapse.npy")
 
