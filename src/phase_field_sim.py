@@ -11,6 +11,7 @@ dt = 0.1
 bioelectric_coupling = 0.5
 phase_diffusion = 1.0
 phase_potential_strength = 2.0
+voltage_feedback_strength = 0.4
 
 # Initialization
 def initialize_fields(shape):
@@ -27,11 +28,18 @@ def update_phase_field(phase, voltage, spin):
     dphi = -phase_potential_strength * local_potential + phase_diffusion * lap + coupling_term
     return phase + dt * dphi
 
+# Voltage feedback from phase
+def update_voltage_field(voltage, phase):
+    voltage_change = voltage_feedback_strength * (phase - 0.5)
+    voltage += dt * voltage_change
+    return np.clip(voltage, 0.0, 1.0)
+
 # Run Simulation
 voltage_grid, spin_states, phase_field = initialize_fields(grid_size)
 
 for step in range(steps):
     phase_field = update_phase_field(phase_field, voltage_grid, spin_states)
+    voltage_grid = update_voltage_field(voltage_grid, phase_field)
     if step % 50 == 0:
         print(f"Step {step} complete")
 
