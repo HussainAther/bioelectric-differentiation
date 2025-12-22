@@ -51,3 +51,8 @@ plt.colorbar(label='Phase (Φ)')
 plt.tight_layout()
 plt.show()
 
+# Export voltage + phase as multi-channel .npy
+export_tensor = np.stack([voltage_grid, phase_field], axis=0)
+np.save("phase_voltage_fields.npy", export_tensor)
+print("Exported multi-channel tensor to phase_voltage_fields.npy")
+
